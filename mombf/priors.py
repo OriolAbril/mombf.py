@@ -18,12 +18,12 @@ def gmomprior_penalty(beta, phi, g, Winv, p_j):
     in the group. For example:
         groups=(1,1,2,3,4,4,4) -> p_j=(2,2,1,1,3,3,3)
     """
-    bXtXinvb = jnp.dot(jnp.dot(beta, Winv), beta)
-    return bXtXinvb/(phi*g*p_j)*(p_j+2)
+    bXtXinvb = jnp.dot(jnp.dot(beta, Winv/p_j*(p_j+2)), beta)
+    return bXtXinvb/(phi*g)
 
 def gmomprior(beta, phi, g, W, Winv, p_j):
     """Calculate gmom (includes mom case).
     See docs on ``gmomprior_penalty``
     """
-    ans = normalprior(gamma, beta, phi, g, W)
-    return ans + gmomprior_penalty(gamma, beta, phi, g, Winv, p_j)
+    ans = normalprior(beta, phi, g, W)
+    return ans + gmomprior_penalty(beta, phi, g, Winv, p_j)
