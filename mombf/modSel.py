@@ -5,9 +5,8 @@ from itertools import combinations
 from jax import numpy as jnp
 from jax.scipy.special import gammaln
 from jax import vmap, jit, grad, hessian
-from jax.tree_util import Partial
 
-from .likelihoods import poisson_log_lik, logistic_log_lik, logistic_helper
+from .likelihoods import poisson_log_lik, logistic_log_lik
 from .priors import normalprior, gmomprior
 from .ala import marghood_ala_post, marghood_ala_lik
 from .utils import (
@@ -62,23 +61,23 @@ def modelSelection(
         args = [ytX_iter, X_iter, W_iter]
         # likelihood helpers
         if family == "poisson":
-            _loglik = Partial(poisson_log_lik, n=n, fact_y=fact_y)
+            _loglik = lambda b, ytx, x: poisson_log_lik(b, ytx, x, fact_y=fact_y)
         elif family == "logistic":
-            _loglik = Partial(logistic_log_lik, n=n)
+            _loglik = logistic_log_lik
         # prior helpers
         if method == "post":
             if prior == "mom":
                 Winv_iter = apply_mask_matrix(Winv, models_iter)
                 p_j_iter = apply_mask_1d(p_j, models_iter)
                 _logpost = lambda b, ytx, x, w, winv, pj: (
-                    _loglik(b, ytx, x) + gmomprior(b, 1, 1, w, winv, pj)
+                    - _loglik(b, ytx, x) + gmomprior(b, 1, 1, w, winv, pj)
                 )
                 vmaparg = (0, 0, 0, 0, 0, 0)
                 kwargs.update({"winv": Winv_iter, "pj": p_j_iter})
                 args.extend([Winv_iter, p_j_iter])
             elif prior == "normal":
                 _logpost = lambda b, ytx, x, w: (
-                    _loglik(b, ytx, x) + normalprior(b, 1, 1, w)
+                    - _loglik(b, ytx, x) + normalprior(b, 1, 1, w)
                 )
                 vmaparg = (0, 0, 0, 0)
             else:
@@ -91,12 +90,15 @@ def modelSelection(
             if prior == "normal":
                 logpr = jit(vmap(lambda b, w: normalprior(b, 1, 1, w), (0, 0), 0))
                 argspr = (W_iter, )
-                loglik = jit(vmap(_loglik, (0, 0, 0), 0))
+                loglik = jit(vmap(lambda b, ytx, x: -_loglik(b,ytx,x), (0, 0, 0), 0))
                 gloglik = jit(vmap(grad(_loglik, argnums=0), (0, 0, 0), 0))
                 hloglik = jit(vmap(hessian(_loglik, argnums=0), (0, 0, 0), 0))
                 argsl = (ytX_iter, X_iter)
             else:
                 raise ValueError("not implemented")
+            print(loglik(b0, *argsl))
+            print(logpr(b0, *argspr))
+            print(gloglik(b0, *argsl))
             margs = marghood_ala_lik(b0, loglik, gloglik, hloglik, logpr, argsl, argspr)
         modelprobs = modelprobs.at[model_mask].set(margs)
     return models, modelprobs
