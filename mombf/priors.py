@@ -18,8 +18,8 @@ def gmomprior_penalty(beta, phi, g, Winv, p_j):
     in the group. For example:
         groups=(1,1,2,3,4,4,4) -> p_j=(2,2,1,1,3,3,3)
     """
-    bXtXinvb = jnp.dot(jnp.dot(beta, Winv/p_j*(p_j+2)), beta)
-    return bXtXinvb/(phi*g)
+    bXtXinvb = jnp.log(jnp.dot(jnp.dot(beta, Winv/p_j*(p_j+2)), beta))
+    return bXtXinvb - jnp.log(phi*g)
 
 def gmomprior(beta, phi, g, W, Winv, p_j):
     """Calculate gmom (includes mom case).

@@ -9,7 +9,7 @@ from jax.tree_util import Partial
 
 from .likelihoods import poisson_log_lik, logistic_log_lik, logistic_helper
 from .priors import normalprior, gmomprior
-from .ala import marghood_ala
+from .ala import marghood_ala_post, marghood_ala_lik
 from .utils import (
     get_group_zellner,
     get_p_j,
@@ -19,7 +19,9 @@ from .utils import (
 )
 
 
-def modelSelection(X, y, models=None, prior="mom", family="logistic", groups=None):
+def modelSelection(
+    X, y, models=None, prior="mom", family="logistic", groups=None, method="post"
+):
     n, p = X.shape
     if models is None:
         n_models = 2 ** p
@@ -48,6 +50,7 @@ def modelSelection(X, y, models=None, prior="mom", family="logistic", groups=Non
                 .reshape((1, -1))[models[model_mask, :]]
                 .reshape((-1, n_vars))
             )
+        b0 = jnp.zeros(models_iter.shape)
         X_iter = apply_mask_2d(X, models_iter)
         ytX_iter = apply_mask_1d(ytX, models_iter)
         W_iter = apply_mask_matrix(W, models_iter)
@@ -63,31 +66,37 @@ def modelSelection(X, y, models=None, prior="mom", family="logistic", groups=Non
         elif family == "logistic":
             _loglik = Partial(logistic_log_lik, n=n)
         # prior helpers
-        if prior == "mom":
-            Winv_iter = apply_mask_matrix(Winv, models_iter)
-            p_j_iter = apply_mask_1d(p_j, models_iter)
-            _logpost = lambda b, ytx, x, w, winv, pj: (
-                _loglik(b, ytx, x) +
-                gmomprior(b, 1, 1, w, winv, pj)
-            )
-            vmaparg = (0, 0, 0, 0, 0, 0)
-            kwargs.update({
-                "winv": Winv_iter,
-                "pj": p_j_iter
-            })
-            args.extend([Winv_iter, p_j_iter])
-        elif prior == "normal":
-            _logpost = lambda b, ytx, x, w: (
-                _loglik(b, ytx, x) +
-                normalprior(b, 1, 1, w)
-            )
-            vmaparg = (0, 0, 0, 0)
-        else:
-            raise ValueError(f"prior {prior} not recognized")
-        b0 = jnp.zeros(models_iter.shape)
-        logpost = jit(vmap(_logpost, vmaparg, 0))
-        glogpost = jit(vmap(grad(_logpost, argnums=0), vmaparg, 0))
-        hlogpost = jit(vmap(hessian(_logpost, argnums=0), vmaparg, 0))
-        margs = marghood_ala(b0, logpost, glogpost, hlogpost, *args)
+        if method == "post":
+            if prior == "mom":
+                Winv_iter = apply_mask_matrix(Winv, models_iter)
+                p_j_iter = apply_mask_1d(p_j, models_iter)
+                _logpost = lambda b, ytx, x, w, winv, pj: (
+                    _loglik(b, ytx, x) + gmomprior(b, 1, 1, w, winv, pj)
+                )
+                vmaparg = (0, 0, 0, 0, 0, 0)
+                kwargs.update({"winv": Winv_iter, "pj": p_j_iter})
+                args.extend([Winv_iter, p_j_iter])
+            elif prior == "normal":
+                _logpost = lambda b, ytx, x, w: (
+                    _loglik(b, ytx, x) + normalprior(b, 1, 1, w)
+                )
+                vmaparg = (0, 0, 0, 0)
+            else:
+                raise ValueError(f"prior {prior} not recognized")
+            logpost = jit(vmap(_logpost, vmaparg, 0))
+            glogpost = jit(vmap(grad(_logpost, argnums=0), vmaparg, 0))
+            hlogpost = jit(vmap(hessian(_logpost, argnums=0), vmaparg, 0))
+            margs = marghood_ala_post(b0, logpost, glogpost, hlogpost, *args)
+        elif method == "lik":
+            if prior == "normal":
+                logpr = jit(vmap(lambda b, w: normalprior(b, 1, 1, w), (0, 0), 0))
+                argspr = (W_iter, )
+                loglik = jit(vmap(_loglik, (0, 0, 0), 0))
+                gloglik = jit(vmap(grad(_loglik, argnums=0), (0, 0, 0), 0))
+                hloglik = jit(vmap(hessian(_loglik, argnums=0), (0, 0, 0), 0))
+                argsl = (ytX_iter, X_iter)
+            else:
+                raise ValueError("not implemented")
+            margs = marghood_ala_lik(b0, loglik, gloglik, hloglik, logpr, argsl, argspr)
         modelprobs = modelprobs.at[model_mask].set(margs)
     return models, modelprobs

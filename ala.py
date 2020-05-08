@@ -1,6 +1,8 @@
 """
 
+
 exit()
+
 venv_on_jax
 python
 
@@ -13,7 +15,8 @@ from jax import vmap
 from jax.tree_util import Partial
 from mombf.modSel import modelSelection
 from mombf.utils import apply_mask_1d
-p = 4
+
+p = 10
 n = 1000
 key = random.PRNGKey(0)
 X = random.normal(key, (n, p))
@@ -23,18 +26,30 @@ fmt = f"{{:0{p}b}}"
 gammes = np.array([list(fmt.format(i)) for i in range(2 ** p)])
 gammes = jnp.array(gammes == "0")[:-1,:]
 
-_, modprobs = modelSelection(X, y, gammes, family="logistic", prior="mom")
+_, modprobs = modelSelection(X, y, gammes, family="logistic", prior="normal")
 order = jnp.argsort(modprobs)[::-1]
 (gammes[order, :], modprobs[order])
 
-func = lambda y, x, z: z*jnp.dot(y, x)
-func(y, X, 3)
-part = Partial(func, x=X, z=3)
-part(y=y, x=X/3)
 
-k = {"a": 1}
+## Iris datset
+import numpy as np
+from sklearn import datasets
+import pandas as pd
 
-k.update(dict(b=3, c=4))
+iris = datasets.load_iris()
+y = iris.target
+mask = np.isin(y, (0, 1))
+y = y[mask]
+n = len(y)
+df = pd.DataFrame(iris.data[mask, :2], columns=("sepal_length", "sepal_width"))
+df["rand"] = np.random.normal(size=n)
+X = df[["sepal_length", "sepal_width"]].values
+p = X.shape[1]
+fmt = f"{{:0{p}b}}"
+gammes = np.array([list(fmt.format(i)) for i in range(2 ** p)])
+gammes = jnp.array(gammes == "0")[:-1,:]
 
-k
+_, modprobs = modelSelection(X, y, family="logistic", prior="normal", method="lik")
+order = jnp.argsort(modprobs)[::-1]
+(gammes[order, :], modprobs[order])
 
