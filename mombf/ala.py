@@ -6,9 +6,9 @@ custom_dot = vmap(lambda g, H: jnp.dot(jnp.dot(g, H), g), (0, 0), 0)
 custom_prod = vmap(lambda g, H: jnp.dot(H, g), (0, 0), 0)
 
 
-def marghood_ala_post(b0, logpost, glogpost, hlogpost, *args):
-    gpost = glogpost(b0, *args)
-    Hpost = hlogpost(b0, *args)
+def marghood_ala_post(b0, logpost, glogpost, hlogpost, args):
+    gpost = -glogpost(b0, *args)
+    Hpost = -hlogpost(b0, *args)
     Hinv = jnp.linalg.inv(Hpost)
     f0 = logpost(b0, *args)
     ans = (

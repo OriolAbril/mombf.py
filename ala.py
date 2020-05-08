@@ -14,7 +14,7 @@ from jax.tree_util import Partial
 from mombf.modSel import modelSelection
 from mombf.utils import apply_mask_1d
 
-p = 10
+p = 19
 n = 1000
 key = random.PRNGKey(0)
 X = random.normal(key, (n, p))
@@ -24,9 +24,12 @@ fmt = f"{{:0{p}b}}"
 gammes = np.array([list(fmt.format(i)) for i in range(2 ** p)])
 gammes = jnp.array(gammes == "0")[:-1,:]
 
-_, modprobs = modelSelection(X, y, gammes, family="logistic", prior="normal", method="post")
+_, modprobs = modelSelection(X, y, gammes, family="logistic", prior="normal", method="lik")
 order = jnp.argsort(modprobs)[::-1]
 (gammes[order, :], modprobs[order])
+
+2**19
+print(gammes[order, :][0])
 
 
 ## Iris datset
@@ -42,13 +45,14 @@ n = len(y)
 df = pd.DataFrame(iris.data[mask, :2], columns=("sepal_length", "sepal_width"))
 df["rand"] = np.random.normal(size=n)
 df["rand2"] = np.random.exponential(size=n)
-X = df[["sepal_length", "sepal_width", "rand"]].values
+# X = df[["sepal_length", "sepal_width", "rand"]].values
+X = df.values
 p = X.shape[1]
 fmt = f"{{:0{p}b}}"
 gammes = np.array([list(fmt.format(i)) for i in range(2 ** p)])
 gammes = jnp.array(gammes == "0")[:-1,:]
 
-_, modprobs = modelSelection(X, y, gammes, family="poisson", prior="normal", method="post")
+_, modprobs = modelSelection(X, y, gammes, family="logistic", prior="normal", method="post")
 order = jnp.argsort(modprobs)[::-1]
 (gammes[order, :], modprobs[order])
 
