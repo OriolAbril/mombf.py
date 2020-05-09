@@ -15,8 +15,8 @@ def normal_log_lik(beta, phi, y, X):
 
 def logistic_log_lik(beta, ytX, X):
     return (
-        - jnp.sum(jnp.dot(ytX, beta))
-        + jnp.sum(jnp.log(1+jnp.exp(jnp.dot(X, beta))))
+        jnp.sum(jnp.dot(ytX, beta))
+        - jnp.sum(jnp.log(1+jnp.exp(jnp.dot(X, beta))))
     )
 
 
@@ -30,7 +30,7 @@ def logistic_log_lik_cond(beta, ytX, X, n):
     return -lik
 
 def poisson_log_lik(beta, ytX, X, fact_y):
-    return - jnp.dot(ytX, beta) + jnp.sum(jnp.exp(jnp.dot(X, beta))) + fact_y
+    return jnp.dot(ytX, beta) - jnp.sum(jnp.exp(jnp.dot(X, beta))) - fact_y
 
 def poisson_log_lik_cond(beta, ytX, X, n, fact_y):
     aux_fun = Partial(poisson_log_lik, ytX=ytX, X=X, n=n, fact_y=fact_y)

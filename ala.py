@@ -28,10 +28,6 @@ _, modprobs = modelSelection(X, y, gammes, family="logistic", prior="normal", me
 order = jnp.argsort(modprobs)[::-1]
 (gammes[order, :], modprobs[order])
 
-2**19
-print(gammes[order, :][0])
-
-
 ## Iris datset
 from sklearn import datasets
 import pandas as pd
@@ -52,7 +48,7 @@ fmt = f"{{:0{p}b}}"
 gammes = np.array([list(fmt.format(i)) for i in range(2 ** p)])
 gammes = jnp.array(gammes == "0")[:-1,:]
 
-_, modprobs = modelSelection(X, y, gammes, family="logistic", prior="normal", method="post")
+_, modprobs = modelSelection(X, y, gammes, family="poisson", prior="normal", method="post")
 order = jnp.argsort(modprobs)[::-1]
 (gammes[order, :], modprobs[order])
 

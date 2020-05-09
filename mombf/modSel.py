@@ -35,6 +35,54 @@ def modelSelection(
     modelprobs = jnp.empty(n_models)
     fact_y = jnp.sum(gammaln(y + 1))
     ytX = jnp.dot(y, X)
+    ## define vmapped functions ##
+    # likelihood helpers
+    if family == "poisson":
+        _loglik = lambda b, ytx, x: poisson_log_lik(b, ytx, x, fact_y=fact_y)
+    elif family == "logistic":
+        _loglik = logistic_log_lik
+    if method == "post":
+        if prior == "mom":
+            _logpost = lambda b, ytx, x, w, winv, pj: (
+                _loglik(b, ytx, x) + gmomprior(b, 1, 1, w, winv, pj)
+            )
+            vmaparg = (0, 0, 0, 0, 0, 0)
+        elif prior == "normal":
+            _logpost = lambda b, ytx, x, w: (
+                _loglik(b, ytx, x) + normalprior(b, 1, 1, w)
+            )
+            vmaparg = (0, 0, 0, 0)
+        else:
+            raise ValueError(f"prior {prior} not recognized")
+        logpost = jit(vmap(_logpost, vmaparg, 0))
+        glogpost = jit(vmap(grad(_logpost, argnums=0), vmaparg, 0))
+        hlogpost = jit(vmap(hessian(_logpost, argnums=0), vmaparg, 0))
+        jitted_ala = jit(
+            Partial(
+                marghood_ala_post,
+                logpost=logpost,
+                glogpost=glogpost,
+                hlogpost=hlogpost)
+        )
+    elif method == "lik":
+        if prior == "normal":
+            logpr = jit(vmap(lambda b, w: normalprior(b, 1, 1, w), (0, 0), 0))
+            loglik = jit(vmap(_loglik, (0, 0, 0), 0))
+            gloglik = jit(vmap(grad(_loglik, argnums=0), (0, 0, 0), 0))
+            hloglik = jit(vmap(hessian(_loglik, argnums=0), (0, 0, 0), 0))
+        else:
+            raise ValueError("not implemented")
+        jitted_ala = jit(
+            Partial(
+                marghood_ala_lik,
+                logl=loglik,
+                glogl=gloglik,
+                hlogl=hloglik,
+                logpr=logpr,
+            )
+        )
+    ## loop, we need equal shapes for vmap, hence calculations are vectorized ##
+    ## on a number of selected variables basis ##
     for n_vars in range(1, p + 1):
         if models is None:
             models_iter = jnp.array(list(combinations(jnp.arange(p), n_vars)))
@@ -54,63 +102,18 @@ def modelSelection(
         X_iter = apply_mask_2d(X, models_iter)
         ytX_iter = apply_mask_1d(ytX, models_iter)
         W_iter = apply_mask_matrix(W, models_iter)
-        kwargs = {
-            "ytx": ytX_iter,
-            "x": X_iter,
-            "w": W_iter,
-        }
         args = [ytX_iter, X_iter, W_iter]
-        # likelihood helpers
-        if family == "poisson":
-            _loglik = lambda b, ytx, x: poisson_log_lik(b, ytx, x, fact_y=fact_y)
-        elif family == "logistic":
-            _loglik = logistic_log_lik
+        if prior == "mom":
+            Winv_iter = apply_mask_matrix(Winv, models_iter)
+            p_j_iter = apply_mask_1d(p_j, models_iter)
+            args.extend([Winv_iter, p_j_iter])
         # prior helpers
         if method == "post":
-            if prior == "mom":
-                Winv_iter = apply_mask_matrix(Winv, models_iter)
-                p_j_iter = apply_mask_1d(p_j, models_iter)
-                _logpost = lambda b, ytx, x, w, winv, pj: (
-                    -_loglik(b, ytx, x) + gmomprior(b, 1, 1, w, winv, pj)
-                )
-                vmaparg = (0, 0, 0, 0, 0, 0)
-                kwargs.update({"winv": Winv_iter, "pj": p_j_iter})
-                args.extend([Winv_iter, p_j_iter])
-            elif prior == "normal":
-                _logpost = lambda b, ytx, x, w: (
-                    -_loglik(b, ytx, x) + normalprior(b, 1, 1, w)
-                )
-                vmaparg = (0, 0, 0, 0)
-            else:
-                raise ValueError(f"prior {prior} not recognized")
-            logpost = vmap(_logpost, vmaparg, 0)
-            glogpost = vmap(grad(_logpost, argnums=0), vmaparg, 0)
-            hlogpost = vmap(hessian(_logpost, argnums=0), vmaparg, 0)
-            margs = jit(
-                Partial(
-                    marghood_ala_post,
-                    logpost=logpost,
-                    glogpost=glogpost,
-                    hlogpost=hlogpost)
-            )(b0=b0, args=args)
+            margs = jitted_ala(b0=b0, args=args)
         elif method == "lik":
             if prior == "normal":
-                logpr = jit(vmap(lambda b, w: normalprior(b, 1, 1, w), (0, 0), 0))
                 argspr = (W_iter,)
-                loglik = vmap(lambda b, ytx, x: -_loglik(b, ytx, x), (0, 0, 0), 0)
-                gloglik = vmap(grad(_loglik, argnums=0), (0, 0, 0), 0)
-                hloglik = vmap(hessian(_loglik, argnums=0), (0, 0, 0), 0)
                 argsl = (ytX_iter, X_iter)
-            else:
-                raise ValueError("not implemented")
-            margs = jit(
-                Partial(
-                    marghood_ala_lik,
-                    logl=loglik,
-                    glogl=gloglik,
-                    hlogl=hloglik,
-                    logpr=logpr,
-                )
-            )(b0=b0, argsl=argsl, argspr=argspr)
+            margs = jitted_ala(b0=b0, argsl=argsl, argspr=argspr)
         modelprobs = modelprobs.at[model_mask].set(margs)
     return models, modelprobs

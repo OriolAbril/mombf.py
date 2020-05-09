@@ -20,8 +20,8 @@ def marghood_ala_post(b0, logpost, glogpost, hlogpost, args):
 
 
 def marghood_ala_lik(b0, logl, glogl, hlogl, logpr, argsl, argspr):
-    glik = glogl(b0, *argsl)
-    Hlik = hlogl(b0, *argsl)
+    glik = -glogl(b0, *argsl)
+    Hlik = -hlogl(b0, *argsl)
     Hinv = jnp.linalg.inv(Hlik)
     btilde = b0 - custom_prod(Hinv, glik)
     f0 = logl(b0, *argsl) + logpr(btilde, *argspr)
