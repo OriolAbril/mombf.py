@@ -8,7 +8,7 @@ from jax import vmap, jit, grad, hessian
 from jax.tree_util import Partial
 
 from .likelihoods import poisson_log_lik, logistic_log_lik
-from .priors import normalprior, gmomprior
+from .priors import normalprior, gmomprior, gmomprior_correction
 from .ala import marghood_ala_post, marghood_ala_lik
 from .utils import (
     get_group_zellner,
@@ -35,6 +35,8 @@ def modelSelection(
     modelprobs = jnp.empty(n_models)
     fact_y = jnp.sum(gammaln(y + 1))
     ytX = jnp.dot(y, X)
+    if prior == "mom":
+        XtX = jnp.dot(X.T, X)
     ## define vmapped functions ##
     # likelihood helpers
     if family == "poisson":
@@ -42,19 +44,15 @@ def modelSelection(
     elif family == "logistic":
         _loglik = logistic_log_lik
     if method == "post":
-        _logpost = lambda b, ytx, x, w: (
-            _loglik(b, ytx, x) + normalprior(b, 1, 1, w)
-        )
+        _logpost = lambda b, ytx, x, w: (_loglik(b, ytx, x) + normalprior(b, 1, 1, w))
         vmaparg = (0, 0, 0, 0)
         logpost = jit(vmap(_logpost, vmaparg, 0))
         glogpost = jit(vmap(grad(_logpost, argnums=0), vmaparg, 0))
         hlogpost = jit(vmap(hessian(_logpost, argnums=0), vmaparg, 0))
         jitted_ala = jit(
             Partial(
-                marghood_ala_post,
-                logpost=logpost,
-                glogpost=glogpost,
-                hlogpost=hlogpost)
+                marghood_ala_post, logpost=logpost, glogpost=glogpost, hlogpost=hlogpost
+            )
         )
     elif method == "lik":
         logpr = jit(vmap(lambda b, w: normalprior(b, 1, 1, w), (0, 0), 0))
@@ -91,9 +89,6 @@ def modelSelection(
         X_iter = apply_mask_2d(X, models_iter)
         ytX_iter = apply_mask_1d(ytX, models_iter)
         W_iter = apply_mask_matrix(W, models_iter)
-        if prior == "mom":
-            Winv_iter = apply_mask_matrix(Winv, models_iter)
-            p_j_iter = apply_mask_1d(p_j, models_iter)
         if method == "post":
             args = [ytX_iter, X_iter, W_iter]
             margs = jitted_ala(b0=b0, args=args)
@@ -101,5 +96,12 @@ def modelSelection(
             argspr = (W_iter,)
             argsl = (ytX_iter, X_iter)
             margs = jitted_ala(b0=b0, argsl=argsl, argspr=argspr)
+        if prior == "mom":
+            p_j_iter = apply_mask_1d(p_j, models_iter)
+            Winv_iter = apply_mask_matrix(Winv, models_iter)
+            XtX_iter = apply_mask_matrix(XtX, models_iter)
+            margs += vmap(gmomprior_correction, (None, 0, 0, 0, 0), 0)(
+                1, Winv_iter, p_j_iter, XtX_iter, ytX_iter
+            )
         modelprobs = modelprobs.at[model_mask].set(margs)
     return models, modelprobs

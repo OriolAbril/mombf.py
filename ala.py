@@ -14,7 +14,7 @@ from jax.tree_util import Partial
 from mombf.modSel import modelSelection
 from mombf.utils import apply_mask_1d
 
-p = 19
+p = 5
 n = 1000
 key = random.PRNGKey(0)
 X = random.normal(key, (n, p))
@@ -24,7 +24,7 @@ fmt = f"{{:0{p}b}}"
 gammes = np.array([list(fmt.format(i)) for i in range(2 ** p)])
 gammes = jnp.array(gammes == "0")[:-1,:]
 
-_, modprobs = modelSelection(X, y, gammes, family="logistic", prior="normal", method="lik")
+_, modprobs = modelSelection(X, y, gammes, family="logistic", prior="mom", method="post")
 order = jnp.argsort(modprobs)[::-1]
 (gammes[order, :], modprobs[order])
 

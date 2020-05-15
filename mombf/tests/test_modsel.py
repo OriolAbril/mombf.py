@@ -8,7 +8,7 @@ from mombf.modSel import modelSelection
 
 
 @pytest.mark.parametrize("family", ("logistic", "poisson"))
-@pytest.mark.parametrize("prior", ("normal",))
+@pytest.mark.parametrize("prior", ("normal", "mom"))
 @pytest.mark.parametrize("method", ("lik", "post"))
 def test_modelSelection(family, prior, method):
     p = 5

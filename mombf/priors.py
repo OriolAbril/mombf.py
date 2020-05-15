@@ -1,6 +1,6 @@
 """Prior functions available"""
 from jax import numpy as jnp
-from jax.numpy.linalg import det
+from jax.numpy.linalg import det, inv
 
 def normalprior(beta, phi, g, W):
     """Calculate normal prior.
@@ -27,3 +27,9 @@ def gmomprior(beta, phi, g, W, Winv, p_j):
     """
     ans = normalprior(beta, phi, g, W)
     return ans + gmomprior_penalty(beta, phi, g, Winv, p_j)
+
+def gmomprior_correction(g, Winv, p_j, XtX, ytX):
+    Winv = Winv/p_j*(p_j+2)
+    S = inv(jnp.dot(XtX, Winv/g))
+    m = jnp.dot(S, ytX.T)
+    return jnp.trace(jnp.dot(S, Winv))/g + jnp.dot(jnp.dot(m, Winv), m)/g
