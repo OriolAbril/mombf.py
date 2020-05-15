@@ -42,18 +42,10 @@ def modelSelection(
     elif family == "logistic":
         _loglik = logistic_log_lik
     if method == "post":
-        if prior == "mom":
-            _logpost = lambda b, ytx, x, w, winv, pj: (
-                _loglik(b, ytx, x) + gmomprior(b, 1, 1, w, winv, pj)
-            )
-            vmaparg = (0, 0, 0, 0, 0, 0)
-        elif prior == "normal":
-            _logpost = lambda b, ytx, x, w: (
-                _loglik(b, ytx, x) + normalprior(b, 1, 1, w)
-            )
-            vmaparg = (0, 0, 0, 0)
-        else:
-            raise ValueError(f"prior {prior} not recognized")
+        _logpost = lambda b, ytx, x, w: (
+            _loglik(b, ytx, x) + normalprior(b, 1, 1, w)
+        )
+        vmaparg = (0, 0, 0, 0)
         logpost = jit(vmap(_logpost, vmaparg, 0))
         glogpost = jit(vmap(grad(_logpost, argnums=0), vmaparg, 0))
         hlogpost = jit(vmap(hessian(_logpost, argnums=0), vmaparg, 0))
@@ -65,13 +57,10 @@ def modelSelection(
                 hlogpost=hlogpost)
         )
     elif method == "lik":
-        if prior == "normal":
-            logpr = jit(vmap(lambda b, w: normalprior(b, 1, 1, w), (0, 0), 0))
-            loglik = jit(vmap(_loglik, (0, 0, 0), 0))
-            gloglik = jit(vmap(grad(_loglik, argnums=0), (0, 0, 0), 0))
-            hloglik = jit(vmap(hessian(_loglik, argnums=0), (0, 0, 0), 0))
-        else:
-            raise ValueError("not implemented")
+        logpr = jit(vmap(lambda b, w: normalprior(b, 1, 1, w), (0, 0), 0))
+        loglik = jit(vmap(_loglik, (0, 0, 0), 0))
+        gloglik = jit(vmap(grad(_loglik, argnums=0), (0, 0, 0), 0))
+        hloglik = jit(vmap(hessian(_loglik, argnums=0), (0, 0, 0), 0))
         jitted_ala = jit(
             Partial(
                 marghood_ala_lik,
@@ -102,18 +91,15 @@ def modelSelection(
         X_iter = apply_mask_2d(X, models_iter)
         ytX_iter = apply_mask_1d(ytX, models_iter)
         W_iter = apply_mask_matrix(W, models_iter)
-        args = [ytX_iter, X_iter, W_iter]
         if prior == "mom":
             Winv_iter = apply_mask_matrix(Winv, models_iter)
             p_j_iter = apply_mask_1d(p_j, models_iter)
-            args.extend([Winv_iter, p_j_iter])
-        # prior helpers
         if method == "post":
+            args = [ytX_iter, X_iter, W_iter]
             margs = jitted_ala(b0=b0, args=args)
         elif method == "lik":
-            if prior == "normal":
-                argspr = (W_iter,)
-                argsl = (ytX_iter, X_iter)
+            argspr = (W_iter,)
+            argsl = (ytX_iter, X_iter)
             margs = jitted_ala(b0=b0, argsl=argsl, argspr=argspr)
         modelprobs = modelprobs.at[model_mask].set(margs)
     return models, modelprobs
