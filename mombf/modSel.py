@@ -20,8 +20,34 @@ from .utils import (
 
 
 def modelSelection(
-    X, y, models=None, prior="mom", family="logistic", groups=None, method="post"
+    X, y, models=None, prior="normal", family="logistic", groups=None, method="post"
 ):
+    """Bayesian model selection for generalized linear models.
+
+    ``modelSelection`` enumerates all the models or iterates over ``models`` to
+    perform Bayesian model selection for linear, logistic or poisson regression
+    using local or non-local priors.
+
+    Parameters
+    ----------
+    X : array_like
+        Design matrix
+    y : array_like
+        Observations
+    models : array_like, optional
+        If ``None``, enumeration will consider all possible models `ignoring groups`.
+    prior : {mom, normal}, optional
+    family : {logistic, poisson}, optional
+    groups : array_like, optional
+    method : {post, like}, optional
+
+    Returns
+    -------
+    models : array_like
+        Models considered in enumeration.
+    modelprobs : array_like
+        Posterior probabilities assigned to each model.
+    """
     n, p = X.shape
     if models is None:
         n_models = 2 ** p

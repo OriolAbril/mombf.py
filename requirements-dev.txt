@@ -1,1 +1,7 @@
 pytest
+sphinx
+numpydoc
+nbsphinx
+recommonmark
+ipython
+pydata_sphinx_theme
