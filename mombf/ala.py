@@ -25,12 +25,7 @@ def marghood_ala_lik(b0, logl, glogl, hlogl, logpr, argsl, argspr):
     Hinv = jnp.linalg.inv(Hlik)
     btilde = b0 - custom_prod(Hinv, glik)
     f0 = logl(b0, *argsl) + logpr(btilde, *argspr)
-    ans = (
-        f0
-        + 0.5 * (
-            custom_dot(glik, Hinv)
-            + jnp.log(2 * jnp.pi)
-            - jnp.log(jnp.linalg.det(Hlik))
-        )
+    ans = f0 + 0.5 * (
+        custom_dot(glik, Hinv) + jnp.log(2 * jnp.pi) - jnp.log(jnp.linalg.det(Hlik))
     )
     return ans

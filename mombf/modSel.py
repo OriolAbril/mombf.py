@@ -8,7 +8,10 @@ from jax import vmap, jit, grad, hessian
 from jax.tree_util import Partial
 
 from .likelihoods import poisson_log_lik, logistic_log_lik
-from .priors import normalprior, gmomprior, gmomprior_correction
+from .priors import (
+    normalprior,
+    gmomprior_correction,
+)
 from .ala import marghood_ala_post, marghood_ala_lik
 from .utils import (
     get_group_zellner,
@@ -48,7 +51,9 @@ def modelSelection(
     modelprobs : array_like
         Posterior probabilities assigned to each model.
     """
-    n, p = X.shape
+    if prior not in ("normal", "mom"):
+        raise ValueError("prior not recognized")
+    _, p = X.shape
     if models is None:
         n_models = 2 ** p
         model_i = 0
@@ -69,6 +74,8 @@ def modelSelection(
         _loglik = lambda b, ytx, x: poisson_log_lik(b, ytx, x, fact_y=fact_y)
     elif family == "logistic":
         _loglik = logistic_log_lik
+    else:
+        raise ValueError("family not recognized")
     if method == "post":
         _logpost = lambda b, ytx, x, w: (_loglik(b, ytx, x) + normalprior(b, 1, 1, w))
         vmaparg = (0, 0, 0, 0)
@@ -94,6 +101,8 @@ def modelSelection(
                 logpr=logpr,
             )
         )
+    else:
+        raise ValueError("method not recognized")
     ## loop, we need equal shapes for vmap, hence calculations are vectorized ##
     ## on a number of selected variables basis ##
     for n_vars in range(1, p + 1):
